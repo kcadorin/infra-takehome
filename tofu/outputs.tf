@@ -13,8 +13,8 @@ output "postgres_port" {
   value       = var.postgres_port
 }
 
-output "postgres_connection_string" {
-  description = "PostgreSQL connection string"
-  value       = "postgresql://postgres:${var.postgres_password}@localhost:${var.postgres_port}/app"
+output "postgrest_db_connection_string" {
+  description = "Connection string to connect to the postgrest database"
+  value       = "postgres://postgrest_admin:${random_password.postgrest_superuser.result}@host.k3d.internal:${var.postgres_port}/postgrest"
   sensitive   = true
 }

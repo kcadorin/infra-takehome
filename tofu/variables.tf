@@ -1,3 +1,9 @@
+variable "docker_host" {
+  description = "Docker daemon socket path. On macOS with Docker Desktop use unix:///~/.docker/run/docker.sock"
+  type        = string
+  default     = "unix:///var/run/docker.sock"
+}
+
 variable "k3d_cluster_name" {
   description = "Name of the k3d cluster"
   type        = string

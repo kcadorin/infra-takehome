@@ -1,4 +1,6 @@
-provider "docker" {}
+provider "docker" {
+  host = var.docker_host
+}
 
 resource "terraform_data" "k3d_cluster" {
   input = {
@@ -55,7 +57,55 @@ provider "postgresql" {
   sslmode  = "disable"
 }
 
+resource "terraform_data" "postgres_ready" {
+  depends_on = [docker_container.postgres]
+
+  provisioner "local-exec" {
+    command = "until docker exec ${docker_container.postgres.name} pg_isready -U postgres; do sleep 2; done"
+  }
+}
+
 resource "postgresql_database" "postgrest" {
   name       = "postgrest"
-  depends_on = [docker_container.postgres]
+  depends_on = [terraform_data.postgres_ready]
+}
+
+resource "random_password" "postgrest_superuser" {
+  length           = 24
+  special          = true
+  override_special = "!#$%&*()-_=+[]{}:?"
+}
+
+resource "postgresql_role" "postgrest_superuser" {
+  name       = "postgrest_admin"
+  login      = true
+  superuser  = true
+  password   = random_password.postgrest_superuser.result
+  depends_on = [postgresql_database.postgrest]
+}
+
+provider "kubernetes" {
+  config_path    = "~/.kube/config"
+  config_context = "k3d-${var.k3d_cluster_name}"
+}
+
+resource "kubernetes_namespace" "postgrest" {
+  metadata {
+    name = "postgrest"
+  }
+
+  depends_on = [terraform_data.k3d_cluster]
+}
+
+resource "kubernetes_secret" "postgrest" {
+  metadata {
+    name      = "postgrest-config"
+    namespace = kubernetes_namespace.postgrest.metadata[0].name
+  }
+
+  data = {
+    PG_DB_URI       = "postgres://postgrest_admin:${random_password.postgrest_superuser.result}@host.k3d.internal:${var.postgres_port}/postgrest"
+    PG_DB_SCHEMA    = "public"
+    PG_DB_ANON_ROLE = "postgrest_admin"
+  }
 }
