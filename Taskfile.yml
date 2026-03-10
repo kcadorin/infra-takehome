@@ -8,6 +8,7 @@ env:
   DOCKER_HOST: "{{.DOCKER_HOST}}"
 
 tasks:
+# Haven't tested this, only one at a time
   up:
     desc: "Spin up the full stack (terraform + ArgoCD + PostgREST)"
     cmds:
@@ -53,8 +54,8 @@ tasks:
   argocd-install:
     desc: "Install ArgoCD into the k3d cluster"
     cmds:
-      - kubectl --context k3d-infra-takehome apply -f -
       - kubectl --context k3d-infra-takehome apply --server-side -k argocd/
+      - kubectl --context k3d-infra-takehome -n argocd rollout status deployment/argocd-server --timeout=120s
 
   argocd-deploy:
     desc: "Deploy via ArgoCD"
