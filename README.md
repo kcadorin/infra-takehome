@@ -53,3 +53,7 @@ Use a kubernetes job to inject some data into the postgres database
 ## Provide an expected screenshot
 
 Update this file, README.md, with a screenshot of what we should see when we visit the URL after following your instructions - this should show us the data you have injected.
+
+## What you should see
+
+![Result](it_works.png)
