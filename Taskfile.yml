@@ -1,0 +1,58 @@
+version: "3"
+
+vars:
+  DOCKER_HOST: "unix://{{.HOME}}/.docker/run/docker.sock"
+  TOFU_DIR: tofu
+  REPO_URL: '{{.REPO_URL | default "https://github.com/kcadorin/infra-takehome"}}'
+
+env:
+  DOCKER_HOST: "{{.DOCKER_HOST}}"
+
+tasks:
+  up:
+    desc: "Spin up the full stack (terraform + ArgoCD + PostgREST)"
+    deps: [argocd-postgrest]
+
+  down:
+    desc: "Tear down all infrastructure"
+    dir: "{{.TOFU_DIR}}"
+    cmds:
+      - terraform destroy -auto-approve -var="docker_host={{.DOCKER_HOST}}"
+
+  _terraform-up:
+    desc: "Two-phase terraform apply (internal)"
+    dir: "{{.TOFU_DIR}}"
+    cmds:
+      - terraform init -input=false
+      # Phase 1: create k3d cluster + Postgres (no k8s resources yet)
+      - terraform apply -auto-approve
+          -var="docker_host={{.DOCKER_HOST}}"
+          -target=terraform_data.k3d_cluster
+          -target=docker_image.postgres
+          -target=docker_volume.postgres_data
+          -target=docker_container.postgres
+          -target=terraform_data.postgres_ready
+          -target=random_password.postgrest_superuser
+          -target=postgresql_database.postgrest
+          -target=postgresql_role.postgrest_superuser
+      # Merge the k3d kubeconfig so the Kubernetes provider can connect in phase 2
+      - k3d kubeconfig merge
+          $(terraform output -raw cluster_name)
+          --output ~/.kube/config
+          --kubeconfig-switch-context
+      # Phase 2: apply remaining resources (k8s namespace + secret)
+      - terraform apply -auto-approve -var="docker_host={{.DOCKER_HOST}}"
+
+  argocd-install:
+    desc: "Install ArgoCD into the k3d cluster"
+    deps: [_terraform-up]
+    cmds:
+      - kubectl --context k3d-infra-takehome create namespace argocd --dry-run=client -o yaml
+          | kubectl --context k3d-infra-takehome apply -f -
+      - kubectl --context k3d-infra-takehome apply --server-side -k argocd/
+
+  argocd-postgrest:
+    desc: "Deploy PostgREST via ArgoCD Application"
+    deps: [argocd-install]
+    cmds:
+      - kubectl --context k3d-infra-takehome apply -f argocd/postgrest-app.yaml

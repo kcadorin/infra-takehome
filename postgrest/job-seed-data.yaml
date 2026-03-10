@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-data
+  namespace: postgrest
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: postgres:16-alpine
+          command:
+            - psql
+            - $(PG_DB_URI)
+            - -c
+            - |
+              CREATE TABLE IF NOT EXISTS messages (id serial PRIMARY KEY, text text);
+              INSERT INTO messages (text) VALUES ('It worked!') ON CONFLICT DO NOTHING;
+          env:
+            - name: PG_DB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: postgrest-config
+                  key: PG_DB_URI

@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgrest
+  namespace: postgrest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgrest
+  template:
+    metadata:
+      labels:
+        app: postgrest
+    spec:
+      containers:
+        - name: postgrest
+          image: postgrest/postgrest:v12.2.3
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PGRST_DB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: postgrest-config
+                  key: PG_DB_URI
+            - name: PGRST_DB_SCHEMA
+              valueFrom:
+                secretKeyRef:
+                  name: postgrest-config
+                  key: PG_DB_SCHEMA
+            - name: PGRST_DB_ANON_ROLE
+              valueFrom:
+                secretKeyRef:
+                  name: postgrest-config
+                  key: PG_DB_ANON_ROLE
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 20
