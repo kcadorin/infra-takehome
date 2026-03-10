@@ -3,28 +3,31 @@ version: "3"
 vars:
   DOCKER_HOST: "unix://{{.HOME}}/.docker/run/docker.sock"
   TOFU_DIR: tofu
-  REPO_URL: '{{.REPO_URL | default "https://github.com/kcadorin/infra-takehome"}}'
 
 env:
   DOCKER_HOST: "{{.DOCKER_HOST}}"
 
 tasks:
   up:
-    desc: "Spin up the full stack"
-    deps: [argocd-postgrest]
-
-  down:
-    desc: "Tear down all infrastructure"
-    dir: "{{.TOFU_DIR}}"
+    desc: "Spin up the full stack (terraform + ArgoCD + PostgREST)"
     cmds:
-      - terraform destroy -auto-approve -var="docker_host={{.DOCKER_HOST}}"
+      - task: terraform-phase1
+      - task: kubeconfig-merge
+      - task: terraform-phase2
+      - task: argocd-install
+      - task: argocd-deploy
 
-  terraform-up:
-    desc: "Two-phase terraform apply"
+  terraform-init:
+    desc: "Initialize terraform providers"
     dir: "{{.TOFU_DIR}}"
     cmds:
       - terraform init -input=false
-      # Phase 1: create k3d cluster + Postgres
+
+  terraform-phase1:
+    desc: "Create k3d cluster and Postgres (phase 1)"
+    deps: [terraform-init]
+    dir: "{{.TOFU_DIR}}"
+    cmds:
       - terraform apply -auto-approve
           -var="docker_host={{.DOCKER_HOST}}"
           -target=terraform_data.k3d_cluster
@@ -35,22 +38,25 @@ tasks:
           -target=random_password.postgrest_superuser
           -target=postgresql_database.postgrest
           -target=postgresql_role.postgrest_superuser
-      - k3d kubeconfig merge
-          $(terraform output -raw cluster_name)
-          --output ~/.kube/config
-          --kubeconfig-switch-context
-      # Phase 2: apply remaining resources (k8s namespace + secret)
+
+  terraform-phase2:
+    desc: "Create Kubernetes namespace and secret (phase 2)"
+    dir: "{{.TOFU_DIR}}"
+    cmds:
       - terraform apply -auto-approve -var="docker_host={{.DOCKER_HOST}}"
+
+  kubeconfig-merge:
+    desc: "Merge k3d context into ~/.kube/config"
+    cmds:
+      - k3d kubeconfig merge infra-takehome --output ~/.kube/config --kubeconfig-switch-context
 
   argocd-install:
     desc: "Install ArgoCD into the k3d cluster"
-    deps: [terraform-up]
     cmds:
       - kubectl --context k3d-infra-takehome apply -f -
       - kubectl --context k3d-infra-takehome apply --server-side -k argocd/
 
-  argocd-postgrest:
-    desc: "Deploy PostgREST via ArgoCD Application"
-    deps: [argocd-install]
+  argocd-deploy:
+    desc: "Deploy via ArgoCD"
     cmds:
       - kubectl --context k3d-infra-takehome apply -f argocd/postgrest-app.yaml

@@ -58,7 +58,7 @@ provider "postgresql" {
 }
 
 resource "terraform_data" "postgres_ready" {
-  depends_on = [docker_container.postgres]
+  triggers_replace = docker_container.postgres.id
 
   provisioner "local-exec" {
     command = "until docker exec ${docker_container.postgres.name} pg_isready -U postgres; do sleep 2; done"
@@ -73,7 +73,7 @@ resource "postgresql_database" "postgrest" {
 resource "random_password" "postgrest_superuser" {
   length           = 24
   special          = true
-  override_special = "!#$%&*()-_=+[]{}:?"
+  override_special = "-_~"
 }
 
 resource "postgresql_role" "postgrest_superuser" {
