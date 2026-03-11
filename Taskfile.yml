@@ -8,7 +8,7 @@ env:
   DOCKER_HOST: "{{.DOCKER_HOST}}"
 
 tasks:
-# Haven't tested this, only one at a time
+# It worked on my end, classic :P
   up:
     desc: "Spin up the full stack (terraform + ArgoCD + PostgREST)"
     cmds:
