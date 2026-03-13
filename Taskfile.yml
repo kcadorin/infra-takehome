@@ -12,6 +12,7 @@ tasks:
   up:
     desc: "Spin up the full stack (terraform + ArgoCD + PostgREST)"
     cmds:
+      - task: terraform-init
       - task: terraform-phase1
       - task: kubeconfig-merge
       - task: terraform-phase2
