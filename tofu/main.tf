@@ -1,14 +1,3 @@
-terraform {
-  required_providers {
-    docker = {
-      source = "kreuzwerker/docker"
-    }
-    postgresql = {
-      source = "cyrilgdn/postgresql"
-    }
-  }
-}
-
 provider "docker" {
   host = var.docker_host
 }
